@@ -20,14 +20,15 @@ while True:
         break
 
     initial_state = {
-        "user_request": user_input,
-        "plan": "",
-        "code": "",
-        "filename": "",
-        "test_result": "",
-        "iteration": 0,
-        "messages": [],
-    }
+    "user_request": user_input,
+    "plan": "",
+    "code": "",
+    "filename": "",
+    "test_result": "",
+    "iteration": 0,
+    "repair_attempts": 0,
+    "messages": [],
+     }
 
     result = graph.invoke(
         initial_state,
