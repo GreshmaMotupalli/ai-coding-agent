@@ -17,7 +17,7 @@ from ai_coding_agent.tools import (
     read_file,
     list_files,
 )
-
+from ai_coding_agent.tester import tester
 
 # =====================================================
 # LOAD ENVIRONMENT VARIABLES
@@ -88,17 +88,26 @@ Rules:
 # =====================================================
 # CODER PROMPT
 # =====================================================
-
 coder_prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
             """
-  You are an expert Python coding agent.
-  You are working inside a workspace directory.
+You are an expert Python coding agent.
 
-  User request: {user_request}
-  Implementation plan: {plan}
+You are working inside a workspace directory.
+
+User request:
+
+{user_request}
+
+Implementation plan:
+
+{plan}
+
+Previous test result:
+
+{test_result}
 
 You have access to these tools:
 
@@ -113,23 +122,22 @@ You have access to these tools:
 
 Rules:
 
- - If you need to see available files, use list_files.
- - If you need to inspect an existing file, use read_file.
- - If you need to create or modify a file, use write_file.
- - Never assume the contents of an existing file.
- - Files must be inside the workspace.
- - Complete the user's request.
- """
+- If you need to see available files, use list_files.
+- If you need to inspect an existing file, use read_file.
+- If you need to create or modify a file, use write_file.
+- Never assume the contents of an existing file.
+- Files must be inside the workspace.
+- If the previous test failed, inspect the error and fix the problem.
+- After fixing the problem, use write_file to update the file.
+- Complete the user's request.
+"""
         ),
 
-        # Previous messages are inserted here
         MessagesPlaceholder(
             variable_name="messages"
         ),
     ]
 )
-
-
 # =====================================================
 # CODER CHAIN
 # =====================================================
@@ -140,25 +148,40 @@ coder_chain = coder_prompt | llm_with_tools
 # =====================================================
 # CODER NODE
 # =====================================================
-
 def coder(state: CodingState):
 
     iteration = state.get("iteration", 0) + 1
+
     print(f"\n--- CODER ITERATION {iteration} ---")
+
     response = coder_chain.invoke(
         {
             "user_request": state["user_request"],
             "plan": state["plan"],
+            "test_result": state.get("test_result", ""),
             "messages": state["messages"],
         }
     )
 
+    filename = state.get("filename", "")
+
+    if response.tool_calls:
+
+        for tool_call in response.tool_calls:
+
+            if tool_call["name"] == "write_file":
+
+                filename = tool_call["args"].get(
+                    "filename",
+                    filename
+                )
+
     return {
         "messages": [response],
         "code": response.content,
+        "filename": filename,
         "iteration": iteration,
     }
-
 # =====================================================
 # HUMAN APPROVAL NODE
 # =====================================================
@@ -222,14 +245,26 @@ def route_after_coder(state: CodingState):
     MAX_ITERATIONS = 5
 
     if state["iteration"] >= MAX_ITERATIONS:
-        return END
+        return "tester"
 
     last_message = state["messages"][-1]
 
     if last_message.tool_calls:
         return "approval"
 
+    if state.get("filename"):
+        return "tester"
+
     return END
+
+def route_after_tester(state: CodingState):
+
+    test_result = state.get("test_result", "")
+
+    if test_result.startswith("PASS"):
+        return END
+
+    return "coder"
 
 # =====================================================
 # BUILD GRAPH
@@ -258,6 +293,10 @@ builder.add_node(
     tool_node
 )
 
+builder.add_node(
+    "tester",
+    tester
+)
 
 # START → PLANNER
 
@@ -282,10 +321,19 @@ builder.add_conditional_edges(
     route_after_coder,
     {
         "approval": "approval",
+        "tester": "tester",
         END: END,
     }
 )
 
+builder.add_conditional_edges(
+    "tester",
+    route_after_tester,
+    {
+        "coder": "coder",
+        END: END,
+    }
+)
 
 # TOOLS → CODER
 
