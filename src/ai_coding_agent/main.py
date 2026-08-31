@@ -1,3 +1,4 @@
+
 from langgraph.types import Command
 
 from ai_coding_agent.graph import graph
@@ -22,6 +23,9 @@ while True:
         "user_request": user_input,
         "plan": "",
         "code": "",
+        "filename": "",
+        "test_result": "",
+        "iteration": 0,
         "messages": [],
     }
 
@@ -53,8 +57,12 @@ while True:
 
     print("\nAgent:")
 
-    if result.get("code"):
+    if result.get("test_result"):
+        print(result["test_result"])
+
+    elif result.get("code"):
         print(result["code"])
 
     else:
         print("Request completed.")
+
