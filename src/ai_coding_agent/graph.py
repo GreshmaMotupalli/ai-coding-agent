@@ -264,7 +264,27 @@ def route_after_tester(state: CodingState):
     if test_result.startswith("PASS"):
         return END
 
-    return "coder"
+    MAX_REPAIRS = 3
+
+    repair_attempts = state.get("repair_attempts", 0)
+
+    if repair_attempts >= MAX_REPAIRS:
+        print("\nMaximum repair attempts reached.")
+        return END
+
+    return "repair"
+
+def repair_node(state: CodingState):
+
+    repair_attempts = state.get("repair_attempts", 0) + 1
+
+    print(
+        f"\n--- REPAIR ATTEMPT {repair_attempts} ---"
+    )
+
+    return {
+        "repair_attempts": repair_attempts
+    }
 
 # =====================================================
 # BUILD GRAPH
@@ -298,6 +318,10 @@ builder.add_node(
     tester
 )
 
+builder.add_node(
+    "repair",
+    repair_node
+)
 # START → PLANNER
 
 builder.add_edge(
@@ -330,7 +354,7 @@ builder.add_conditional_edges(
     "tester",
     route_after_tester,
     {
-        "coder": "coder",
+        "repair": "repair",
         END: END,
     }
 )
@@ -339,6 +363,11 @@ builder.add_conditional_edges(
 
 builder.add_edge(
     "tools",
+    "coder"
+)
+
+builder.add_edge(
+    "repair",
     "coder"
 )
 
