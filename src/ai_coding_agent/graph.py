@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import (ChatPromptTemplate,MessagesPlaceholder)
 from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.types import interrupt
+from langgraph.types import interrupt, Command
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
@@ -94,17 +94,11 @@ coder_prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             """
-You are an expert Python coding agent.
+  You are an expert Python coding agent.
+  You are working inside a workspace directory.
 
-You are working inside a workspace directory.
-
-User request:
-
-{user_request}
-
-Implementation plan:
-
-{plan}
+  User request: {user_request}
+  Implementation plan: {plan}
 
 You have access to these tools:
 
@@ -119,13 +113,13 @@ You have access to these tools:
 
 Rules:
 
-- If you need to see available files, use list_files.
-- If you need to inspect an existing file, use read_file.
-- If you need to create or modify a file, use write_file.
-- Never assume the contents of an existing file.
-- Files must be inside the workspace.
-- Complete the user's request.
-"""
+ - If you need to see available files, use list_files.
+ - If you need to inspect an existing file, use read_file.
+ - If you need to create or modify a file, use write_file.
+ - Never assume the contents of an existing file.
+ - Files must be inside the workspace.
+ - Complete the user's request.
+ """
         ),
 
         # Previous messages are inserted here
@@ -149,8 +143,8 @@ coder_chain = coder_prompt | llm_with_tools
 
 def coder(state: CodingState):
 
-    print("\n--- CODER ---")
-
+    iteration = state.get("iteration", 0) + 1
+    print(f"\n--- CODER ITERATION {iteration} ---")
     response = coder_chain.invoke(
         {
             "user_request": state["user_request"],
@@ -159,12 +153,10 @@ def coder(state: CodingState):
         }
     )
 
-    print("\nCODER RESPONSE:")
-    print(response)
-
     return {
         "messages": [response],
         "code": response.content,
+        "iteration": iteration,
     }
 
 # =====================================================
@@ -180,7 +172,6 @@ def approval_node(state: CodingState):
     tool_call = last_message.tool_calls[0]
 
     tool_name = tool_call["name"]
-
     tool_args = tool_call["args"]
 
     approval = interrupt(
@@ -192,16 +183,30 @@ def approval_node(state: CodingState):
     )
 
     if approval == "yes":
-        return {}
 
-    return {
-        "messages": [
-            {
-                "role": "assistant",
-                "content": "Human rejected the tool call."
-            }
-        ]
-    }
+        print("\nTool approved.")
+
+        return Command(
+            goto="tools"
+        )
+
+    print("\nTool rejected.")
+
+    return Command(
+        goto="coder",
+        update={
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": (
+                        f"Human rejected the tool call: {tool_name}. "
+                        "Do not use this tool call. "
+                        "Choose another approach."
+                    ),
+                }
+            ]
+        },
+    )
 # =====================================================
 # TOOL NODE
 # =====================================================
@@ -212,8 +217,12 @@ tool_node = ToolNode(tools)
 # =====================================================
 # ROUTER
 # =====================================================
-
 def route_after_coder(state: CodingState):
+
+    MAX_ITERATIONS = 5
+
+    if state["iteration"] >= MAX_ITERATIONS:
+        return END
 
     last_message = state["messages"][-1]
 
@@ -221,7 +230,6 @@ def route_after_coder(state: CodingState):
         return "approval"
 
     return END
-
 
 # =====================================================
 # BUILD GRAPH
@@ -276,14 +284,6 @@ builder.add_conditional_edges(
         "approval": "approval",
         END: END,
     }
-)
-
-
-# APPROVAL → TOOLS
-
-builder.add_edge(
-    "approval",
-    "tools"
 )
 
 
