@@ -1,5 +1,5 @@
 import os
-
+import re
 from dotenv import load_dotenv
 
 from langchain_ollama import ChatOllama
@@ -54,7 +54,6 @@ llm_with_tools = llm.bind_tools(tools)
 # =====================================================
 # PLANNER
 # =====================================================
-
 def planner(state: CodingState):
 
     print("\n--- PLANNER ---")
@@ -73,18 +72,39 @@ Rules:
 - Break it into logical steps.
 - Keep the plan simple.
 - Do not write code.
+- If the user specifies an expected program output, include it.
+- If no expected output is specified, write NONE.
+
+At the end, always write:
+
+EXPECTED OUTPUT: <expected output or NONE>
 """
 
     response = llm.invoke(planner_prompt)
 
+    planner_output = response.content
+
     print("\nPLAN:")
-    print(response.content)
+    print(planner_output)
+
+    match = re.search(
+        r"EXPECTED OUTPUT:\s*(.+)",
+        planner_output
+    )
+
+    expected_output = ""
+
+    if match:
+
+        value = match.group(1).strip()
+
+        if value.upper() != "NONE":
+            expected_output = value
 
     return {
-        "plan": response.content
+        "plan": planner_output,
+        "expected_output": expected_output
     }
-
-
 # =====================================================
 # CODER PROMPT
 # =====================================================
