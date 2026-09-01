@@ -1,0 +1,7 @@
+langchain
+langchain-core
+langchain-ollama
+langgraph
+langsmith
+python-dotenv
+typing-extensions
