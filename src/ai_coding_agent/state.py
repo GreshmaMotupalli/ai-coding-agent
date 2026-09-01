@@ -6,6 +6,7 @@ from langgraph.graph.message import add_messages
 
 from langchain_core.messages import BaseMessage
 
+
 class CodingState(TypedDict):
 
     user_request: str
@@ -15,6 +16,8 @@ class CodingState(TypedDict):
     code: str
 
     filename: str
+
+    expected_output: str
 
     test_result: str
 
