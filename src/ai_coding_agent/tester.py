@@ -36,16 +36,8 @@ def tester(state: CodingState):
             timeout=10
         )
 
-        if result.returncode == 0:
-
-            return {
-                "test_result": (
-                    "PASS\n"
-                    f"Output:\n{result.stdout}"
-                )
-            }
-
-        else:
+        # Program crashed
+        if result.returncode != 0:
 
             return {
                 "test_result": (
@@ -53,6 +45,40 @@ def tester(state: CodingState):
                     f"Error:\n{result.stderr}"
                 )
             }
+
+        actual_output = result.stdout.strip()
+
+        expected_output = state.get("expected_output", "").strip()
+
+        # No expected output was provided
+        if not expected_output:
+
+            return {
+                "test_result": (
+                    "PASS\n"
+                    f"Output:\n{actual_output}"
+                )
+            }
+
+        # Functional test
+        if actual_output == expected_output:
+
+            return {
+                "test_result": (
+                    "PASS\n"
+                    f"Expected: {expected_output}\n"
+                    f"Actual: {actual_output}"
+                )
+            }
+
+        # Program ran but produced the wrong result
+        return {
+            "test_result": (
+                "FAIL\n"
+                f"Expected: {expected_output}\n"
+                f"Actual: {actual_output}"
+            )
+        }
 
     except subprocess.TimeoutExpired:
 
