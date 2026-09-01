@@ -1,4 +1,3 @@
-
 from langgraph.types import Command
 
 from ai_coding_agent.graph import graph
@@ -20,15 +19,16 @@ while True:
         break
 
     initial_state = {
-    "user_request": user_input,
-    "plan": "",
-    "code": "",
-    "filename": "",
-    "test_result": "",
-    "iteration": 0,
-    "repair_attempts": 0,
-    "messages": [],
-     }
+        "user_request": user_input,
+        "plan": "",
+        "code": "",
+        "filename": "",
+        "expected_output": "",
+        "test_result": "",
+        "iteration": 0,
+        "repair_attempts": 0,
+        "messages": [],
+    }
 
     result = graph.invoke(
         initial_state,
@@ -56,14 +56,29 @@ while True:
             config=config
         )
 
-    print("\nAgent:")
+    # -----------------------------------------------
+    # FINAL RESULT
+    # -----------------------------------------------
+
+    print("\n--- FINAL RESULT ---")
 
     if result.get("test_result"):
+
         print(result["test_result"])
 
+        print(
+            f"File: {result.get('filename', 'Unknown')}"
+        )
+
+        print(
+            f"Repair attempts: "
+            f"{result.get('repair_attempts', 0)}"
+        )
+
     elif result.get("code"):
+
         print(result["code"])
 
     else:
-        print("Request completed.")
 
+        print("Request completed.")
